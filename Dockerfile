@@ -23,18 +23,33 @@ RUN go build ./cmd/gindoid
 FROM alpine:latest
 
 # Update certificates inside runner container
-RUN apk add --no-cache git openssh ca-certificates
+RUN apk add --no-cache git openssh ca-certificates shadow
 
 # Copy git-annex from builder image
 COPY --from=binbuilder /git-annex /git-annex
 ENV PATH="${PATH}:/git-annex/git-annex.linux"
 
 # Copy binary and templates into final image
-COPY ./templates /templates
-COPY ./assets /assets
-COPY --from=binbuilder /gindoid/gindoid /
+RUN mkdir /app
+COPY ./templates /app/templates
+COPY ./assets /app/assets
+COPY --from=binbuilder /gindoid/gindoid /app
+
+# World readable app directories
+RUN chmod a+rX -R /app
+
+# Create runner user in container
+ARG DUID=${DUID:-1000}
+ARG DGID=${DGID:-1000}
+RUN adduser --home /doihome --disabled-password gindoi
+RUN usermod -u ${DUID} gindoi
+RUN groupmod -g ${DGID} gindoi
+
+# Run as user
+USER gindoi
+
 VOLUME ["/doidata"]
 VOLUME ["/config"]
 
-ENTRYPOINT /gindoid --debug
+ENTRYPOINT /app/gindoid --debug
 EXPOSE 10443
